@@ -62,6 +62,14 @@ def get_data_dir():
   return tempfile.gettempdir()
 
 
+# The number of elements to print for dataset ids/tasks
+_print_threshold = 10
+def get_print_threshold():
+  """Return the printing threshold for array."""
+  return _print_threshold
+
+def set_print_threshold(threshold):
+
 def download_url(url, dest_dir=get_data_dir(), name=None):
   """Download a file to disk.
 

@@ -22,7 +22,19 @@ from deepchem.utils.save import load_from_disk
 logger = logging.getLogger(__name__)
 
 def sparsify_features(X):
-  """Extracts a sparse feature representation from dense feature array."""
+  """Extracts a sparse feature representation from dense feature array.
+
+  Parameters
+  ----------
+  X: np.ndarray
+    Of shape `(n_samples, ...)
+  
+  Returns
+  -------
+  X_sparse, a np.ndarray with `dtype=object` where `X_sparse[i]` is a
+  typle of `(nonzero_inds, nonzero_vals)` with nonzero indices and
+  values in the i-th sample of `X`.
+  """
   n_samples = len(X)
   X_sparse = []
   for i in range(n_samples):
@@ -34,7 +46,24 @@ def sparsify_features(X):
 
 
 def densify_features(X_sparse, num_features):
-  """Expands sparse feature representation to dense feature array."""
+  """Expands sparse feature representation to dense feature array.
+
+  Assumes that the sparse representation was constructed from an array
+  which had original shape `(n_samples, num_features)` so doesn't
+  support reconstructing multidimensional dense arrays.
+
+  Parameters
+  ----------
+  X_sparse: np.ndarray
+    Must have `dtype=object`. `X_sparse[i]` must be a tuple of nonzero
+    indices and values.
+  num_features: int
+    Number of features in dense array.
+
+  Returns
+  -------
+  X, a np.ndarray of shape `(n_samples, num_features)`.
+  """
   n_samples = len(X_sparse)
   X = np.zeros((n_samples, num_features))
   for i in range(n_samples):
@@ -46,10 +75,38 @@ def densify_features(X_sparse, num_features):
 def pad_features(batch_size, X_b):
   """Pads a batch of features to have precisely batch_size elements.
 
-  Version of pad_batch for use at prediction time.
+  Given an array of features with length less than or equal to
+  batch-size, pads it to `batch_size` length. It does this by
+  repeating the original features in tiled fashion. For illustration,
+  suppose that `len(X_b) == 3` and `batch_size == 10`.
+
+  >>> X_b = np.arange(3)
+  >>> X_b
+  array([0, 1, 2])
+  >>> batch_size = 10
+  >>> X_manual = np.array([0, 1, 2, 0, 1, 2, 0, 1, 2, 0])
+  >>> X_out = pad_features(batch_size, X_b)
+  >>> assert (X_manual == X_out).all() 
+
+  This function is similar to `pad_batch` but doesn't handle labels
+  `y` or weights `w` and is intended to be used for inference-time
+  query processing.
+
+  Parameters
+  ----------
+  batch_size: int
+    The number of datapoints in a batch
+  X_b: np.ndarray
+    Must be such that `len(X_b) <= batch_size`
+
+  Returns
+  -------
+  X_out, a np.ndarray with `len(X_out) == batch_size`.
   """
   num_samples = len(X_b)
-  if num_samples == batch_size:
+  if num_samples > batch_size:
+    raise ValueError("Cannot pad an array longer than `batch_size`")
+  elif num_samples == batch_size:
     return X_b
   else:
     # By invariant of when this is called, can assume num_samples > 0
@@ -76,7 +133,28 @@ def pad_features(batch_size, X_b):
 def pad_batch(batch_size, X_b, y_b, w_b, ids_b):
   """Pads batch to have size precisely batch_size elements.
 
-  Fills in batch by wrapping around samples till whole batch is filled.
+  Given arrays of features `X_b`, labels `y_b`, weights `w_b`, and
+  identifiers `ids_b` all with length less than or equal to
+  batch-size, pads them to `batch_size` length. It does this by
+  repeating the original entries in tiled fashion. Note that `X_b,
+  y_b, w_b, ids_b` must all have the same length.
+
+  Parameters
+  ----------
+  batch_size: int
+    The number of datapoints in a batch
+  X_b: np.ndarray
+    Must be such that `len(X_b) <= batch_size`
+  y_b: np.ndarray
+    Must be such that `len(y_b) <= batch_size`
+  w_b: np.ndarray
+    Must be such that `len(w_b) <= batch_size`
+  ids_b: np.ndarray
+    Must be such that `len(ids_b) <= batch_size`
+
+  Returns
+  -------
+  (X_out, y_out, w_out, ids_out), all np.ndarray with length `batch_size`.
   """
   num_samples = len(X_b)
   if num_samples == batch_size:
@@ -129,7 +207,22 @@ def pad_batch(batch_size, X_b, y_b, w_b, ids_b):
 
 
 class Dataset(object):
-  """Abstract base class for datasets defined by X, y, w elements."""
+  """Abstract base class for datasets defined by X, y, w elements.
+
+  `Dataset` objects are used to store representations of a dataset as
+  used in a machine learning task. Datasets contain features `X`,
+  labels `y`, weights `w` and identifiers `ids`. Different subclasses
+  of `Dataset` may choose to hold `X, y, w, ids` in memory or on disk.
+
+  The `Dataset` class attempts to provide for strong interoperability
+  with other machine learning representations for datasets.
+  Interconversion methods allow for `Dataset` objects to be converted
+  to and from pandas dataframes, tensorflow datasets, and pytorch
+  datasets (only to and not from for pytorch at present).
+
+  Note that you can never instantiate a `Dataset` object directly.
+  Instead you will need to instantiate one of the concrete subclasses.
+  """
 
   def __init__(self):
     raise NotImplementedError()
@@ -143,7 +236,8 @@ class Dataset(object):
   def get_shape(self):
     """Get the shape of the dataset.
 
-    Returns four tuples, giving the shape of the X, y, w, and ids arrays.
+    Returns four tuples, giving the shape of the X, y, w, and ids
+    arrays.
     """
     raise NotImplementedError()
 
@@ -153,31 +247,55 @@ class Dataset(object):
 
   @property
   def X(self):
-    """Get the X vector for this dataset as a single numpy array."""
+    """Get the X vector for this dataset as a single numpy array.
+
+    Returns
+    -------
+    Numpy array of features `X`.
+    """
     raise NotImplementedError()
 
   @property
   def y(self):
-    """Get the y vector for this dataset as a single numpy array."""
+    """Get the y vector for this dataset as a single numpy array.
+
+    Returns
+    -------
+    Numpy array of labels `y`.
+    """
     raise NotImplementedError()
 
   @property
   def ids(self):
-    """Get the ids vector for this dataset as a single numpy array."""
+    """Get the ids vector for this dataset as a single numpy array.
+
+    Returns
+    -------
+    Numpy array of identifiers `ids`.
+    """
 
     raise NotImplementedError()
 
   @property
   def w(self):
-    """Get the weight vector for this dataset as a single numpy array."""
+    """Get the weight vector for this dataset as a single numpy array.
+
+    Returns
+    -------
+    Numpy array of weights `w`.
+    """
     raise NotImplementedError()
 
   # TODO(rbharath): Update based on discussion in https://github.com/deepchem/deepchem/issues/1816 if necessary
   def __repr__(self):
-      return "<%s X.shape: %s, y.shape: %s, w.shape: %s, ids: %s, task_names: %s>" % (self.__class__.__name__, str(self.X.shape), str(self.y.shape), str(self.w.shape), self.ids.__repr__(), self.get_task_names())
+    id_str = np.array2string(self.ids, threshold=threshold)
+    task_str = np.array2string(np.array(self.get_task_names()), threshold=threshold)
+    return "<%s X.shape: %s, y.shape: %s, w.shape: %s, ids: %s, task_names: %s>" % (self.__class__.__name__, str(self.X.shape), str(self.y.shape), str(self.w.shape), id_str, task_str)
 
   def __str__(self):
-      return "<%s X.shape: %s, y.shape: %s, w.shape: %s, ids: %s, task_names: %s>" % (self.__class__.__name__, str(self.X.shape), str(self.y.shape), str(self.w.shape), self.ids.__repr__(), self.get_task_names())
+    id_str = np.array2string(self.ids, threshold=threshold)
+    task_str = np.array2string(np.array(self.get_task_names()), threshold=threshold)
+    return "<%s X.shape: %s, y.shape: %s, w.shape: %s, ids: %s, task_names: %s>" % (self.__class__.__name__, str(self.X.shape), str(self.y.shape), str(self.w.shape), id_str, task_str)
 
   def iterbatches(self,
                   batch_size=None,
@@ -1320,7 +1438,7 @@ class DiskDataset(Dataset):
 
     Returns
     -------
-    DiskDatasset
+    DiskDataset
       A DiskDataset with a single shard.
 
     """
