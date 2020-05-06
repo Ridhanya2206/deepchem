@@ -286,35 +286,41 @@ class Dataset(object):
     """
     raise NotImplementedError()
 
-  # TODO(rbharath): Update based on discussion in https://github.com/deepchem/deepchem/issues/1816 if necessary
   def __repr__(self):
+    """Convert self to REPL print representation."""
+    threshold = dc.utils.get_print_threshold()
     id_str = np.array2string(self.ids, threshold=threshold)
     task_str = np.array2string(np.array(self.get_task_names()), threshold=threshold)
     return "<%s X.shape: %s, y.shape: %s, w.shape: %s, ids: %s, task_names: %s>" % (self.__class__.__name__, str(self.X.shape), str(self.y.shape), str(self.w.shape), id_str, task_str)
 
   def __str__(self):
-    id_str = np.array2string(self.ids, threshold=threshold)
-    task_str = np.array2string(np.array(self.get_task_names()), threshold=threshold)
-    return "<%s X.shape: %s, y.shape: %s, w.shape: %s, ids: %s, task_names: %s>" % (self.__class__.__name__, str(self.X.shape), str(self.y.shape), str(self.w.shape), id_str, task_str)
+    """Convert self to str representation."""
+    return self.__repr__()
 
   def iterbatches(self,
                   batch_size=None,
                   epoch=0,
                   deterministic=False,
                   pad_batches=False):
-    """
+    """Get an object that iterates over minibatches from the dataset.
+
+    Each minibatch is returned as a tuple of four numpy arrays: `(X,
+    y, w, ids)`.
 
     Parameters
     ----------
-
+    batch_size: int, optional
+      Number of elements in each batch
+    epoch: int, optional
+      Number of epochs to walk over dataset
+    deterministic: bool, optional
+      If True, follow deterministic order.
+    pad_batches: bool, optional
+      If True, pad each batch to `batch_size`.
 
     Returns
     -------
-
-    """
-    """Get an object that iterates over minibatches from the dataset.
-
-    Each minibatch is returned as a tuple of four numpy arrays: (X, y, w, ids).
+    Generator which yields tuples of four numpy arrays `(X, y, w, ids)`
     """
     raise NotImplementedError()
 
@@ -338,9 +344,9 @@ class Dataset(object):
 
     >> newx, newy, neww = fn(x, y, w)
 
-    It might be called only once with the whole dataset, or multiple times with
-    different subsets of the data.  Each time it is called, it should transform
-    the samples and return the transformed data.
+    It might be called only once with the whole dataset, or multiple
+    times with different subsets of the data.  Each time it is called,
+    it should transform the samples and return the transformed data.
 
     Parameters
     ----------
@@ -354,7 +360,25 @@ class Dataset(object):
     raise NotImplementedError()
 
   def get_statistics(self, X_stats=True, y_stats=True):
-    """Compute and return statistics of this dataset."""
+    """Compute and return statistics of this dataset.
+
+    Uses `self.itersamples()` to compute means and standard deviations
+    of the dataset. Can compute on large datasets that don't fit in
+    memory.
+
+    Parameters
+    ----------
+    X_stats: bool, optional
+      If True, compute feature-level mean and standard deviations.
+    y_stats: bool, optional
+      If True, compute label-level mean and standard deviations.
+
+    Returns
+    -------
+    If `X_stats == True`, returns `(X_means, X_stds)`. If `y_stats ==
+    True`, returns `(y_means, y_stds)`. If both are true, returns
+    `(X_means, X_stds, y_means, y_stds)`.
+    """
     X_means = 0.0
     X_m2 = 0.0
     y_means = 0.0
@@ -392,8 +416,8 @@ class Dataset(object):
                       pad_batches=False):
     """Create a tf.data.Dataset that iterates over the data in this Dataset.
 
-    Each value returned by the Dataset's iterator is a tuple of (X, y, w) for
-    one batch.
+    Each value returned by the Dataset's iterator is a tuple of (X, y,
+    w) for one batch.
 
     Parameters
     ----------
@@ -402,11 +426,15 @@ class Dataset(object):
     epochs: int
       the number of times to iterate over the Dataset
     deterministic: bool
-      if True, the data is produced in order.  If False, a different random
-      permutation of the data is used for each epoch.
+      if True, the data is produced in order.  If False, a different
+      random permutation of the data is used for each epoch.
     pad_batches: bool
-      if True, batches are padded as necessary to make the size of each batch
-      exactly equal batch_size.
+      if True, batches are padded as necessary to make the size of
+      each batch exactly equal batch_size.
+
+    Returns
+    -------
+    tf.Dataset that iterates over the same data.
     """
     # Retrieve the first sample so we can determine the dtypes.
 
@@ -430,21 +458,33 @@ class Dataset(object):
   def make_pytorch_dataset(self, epochs=1, deterministic=False):
     """Create a torch.utils.data.IterableDataset that iterates over the data in this Dataset.
 
-    Each value returned by the Dataset's iterator is a tuple of (X, y, w, id) for
-    one sample.
+    Each value returned by the Dataset's iterator is a tuple of (X, y,
+    w, id) for one sample.
 
     Parameters
     ----------
     epochs: int
       the number of times to iterate over the Dataset
     deterministic: bool
-      if True, the data is produced in order.  If False, a different random
-      permutation of the data is used for each epoch.
+      if True, the data is produced in order.  If False, a different
+      random permutation of the data is used for each epoch.
+
+    Returns
+    -------
+    `torch.utils.data.IterableDataset` that iterates over the data in
+    this dataset.
     """
     raise NotImplementedError()
 
   def to_dataframe(self):
-    """Construct a pandas DataFrame containing the data from this Dataset."""
+    """Construct a pandas DataFrame containing the data from this Dataset.
+
+    Returns
+    -------
+    pandas datafarme. Will have column "X1,X2,..." for features,
+    "y1,y2,..." for labels, "w1,w2,..." for weights, and column "ids"
+    for identifiers.
+    """
     X = self.X
     y = self.y
     w = self.w
@@ -476,17 +516,21 @@ class Dataset(object):
     df: DataFrame
       the pandas DataFrame
     X: string or list of strings
-      the name of the column or columns containing the X array.  If this is None,
-      it will look for default column names that match those produced by to_dataframe().
+      the name of the column or columns containing the X array.  If
+      this is None, it will look for default column names that match
+      those produced by to_dataframe().
     y: string or list of strings
-      the name of the column or columns containing the y array.  If this is None,
-      it will look for default column names that match those produced by to_dataframe().
+      the name of the column or columns containing the y array.  If
+      this is None, it will look for default column names that match
+      those produced by to_dataframe().
     w: string or list of strings
-      the name of the column or columns containing the w array.  If this is None,
-      it will look for default column names that match those produced by to_dataframe().
+      the name of the column or columns containing the w array.  If
+      this is None, it will look for default column names that match
+      those produced by to_dataframe().
     ids: string
-      the name of the column containing the ids.  If this is None, it will look
-      for default column names that match those produced by to_dataframe().
+      the name of the column containing the ids.  If this is None, it
+      will look for default column names that match those produced by
+      to_dataframe().
     """
     # Find the X values.
 
@@ -548,9 +592,32 @@ class Dataset(object):
 
 
 class NumpyDataset(Dataset):
-  """A Dataset defined by in-memory numpy arrays."""
+  """A Dataset defined by in-memory numpy arrays.
+
+  This subclass of `Dataset` stores arrays `X,y,w,ids` in memory as
+  numpy arrays. This makes it very easy to construct `NumpyDataset`
+  objects. For example
+
+  >>> import numpy as np
+  >>> NumpyDataset(X=np.random.rand(5, 3), y=np.random.rand(5,), ids=np.arange(5))
+  """
 
   def __init__(self, X, y=None, w=None, ids=None, n_tasks=1):
+    """Initialize this object.
+
+    Parameters
+    ----------
+    X: np.ndarray
+      Input features. Of shape `(n_samples,...)`
+    y: np.ndarray, optional
+      Labels. Of shape `(n_samples, n_tasks)` typically.
+    w: np.ndarray, optional
+      Weights. Of same shape as `y`.
+    ids: np.ndarray, optional
+      Identifiers. Of shape `(n_samples,)`
+    n_tasks: int, optional
+      Number of learning tasks.
+    """
     n_samples = len(X)
     if n_samples > 0:
       if y is None:
@@ -584,7 +651,8 @@ class NumpyDataset(Dataset):
   def get_shape(self):
     """Get the shape of the dataset.
 
-    Returns four tuples, giving the shape of the X, y, w, and ids arrays.
+    Returns four tuples, giving the shape of the X, y, w, and ids
+    arrays.
     """
     return self._X.shape, self._y.shape, self._w.shape, self._ids.shape
 
@@ -621,7 +689,23 @@ class NumpyDataset(Dataset):
                   pad_batches=False):
     """Get an object that iterates over minibatches from the dataset.
 
-    Each minibatch is returned as a tuple of four numpy arrays: (X, y, w, ids).
+    Each minibatch is returned as a tuple of four numpy arrays: (X, y,
+    w, ids).
+
+    Parameters
+    ----------
+    batch_size: int, optional
+      Number of elements in each batch
+    epoch: int, optional
+      Number of epochs to walk over dataset
+    deterministic: bool, optional
+      If True, follow deterministic order.
+    pad_batches: bool, optional
+      If True, pad each batch to `batch_size`.
+
+    Returns
+    -------
+    Generator which yields tuples of four numpy arrays `(X, y, w, ids)`
     """
 
     def iterate(dataset, batch_size, deterministic, pad_batches):
@@ -673,9 +757,9 @@ class NumpyDataset(Dataset):
 
     >> newx, newy, neww = fn(x, y, w)
 
-    It might be called only once with the whole dataset, or multiple times with
-    different subsets of the data.  Each time it is called, it should transform
-    the samples and return the transformed data.
+    It might be called only once with the whole dataset, or multiple
+    times with different subsets of the data.  Each time it is called,
+    it should transform the samples and return the transformed data.
 
     Parameters
     ----------
@@ -1540,10 +1624,11 @@ class DiskDataset(Dataset):
 
     Parameters
     ----------
-    select_dir: string
-      Path to new directory that the selected indices will be copied to.
     indices: list
       List of indices to select.
+    select_dir: string
+      Path to new directory that the selected indices will be copied
+      to.
     """
     if select_dir is not None:
       if not os.path.exists(select_dir):
@@ -1866,15 +1951,13 @@ class ImageDataset(Dataset):
   def select(self, indices, select_dir=None):
     """Creates a new dataset from a selection of indices from self.
 
-    TODO(rbharath): select_dir is here due to dc.splits always passing in
-    splits.
-
     Parameters
     ----------
     indices: list
       List of indices to select.
     select_dir: string
-      Ignored.
+      Used to provide same API as `DiskDataset`. Ignored since
+      `NumpYDataset` is purely in-memory.
     """
     if isinstance(self._X, np.ndarray):
       X = self._X[indices]
@@ -1891,16 +1974,21 @@ class ImageDataset(Dataset):
   def make_pytorch_dataset(self, epochs=1, deterministic=False):
     """Create a torch.utils.data.IterableDataset that iterates over the data in this Dataset.
 
-    Each value returned by the Dataset's iterator is a tuple of (X, y, w, id) for
-    one sample.
+    Each value returned by the Dataset's iterator is a tuple of (X, y,
+    w, id) for one sample.
 
     Parameters
     ----------
     epochs: int
       the number of times to iterate over the Dataset
     deterministic: bool
-      if True, the data is produced in order.  If False, a different random
-      permutation of the data is used for each epoch.
+      if True, the data is produced in order.  If False, a different
+      random permutation of the data is used for each epoch.
+
+    Returns
+    -------
+    `torch.utils.data.IterableDataset` iterating over the same data as
+    this dataset.
     """
     import torch
 
@@ -1938,22 +2026,57 @@ class ImageDataset(Dataset):
 
 
 class Databag(object):
-  """
-  A utility class to iterate through multiple datasets together.
+  """A utility class to iterate through multiple datasets together.
+
+
+  A `Databag` is useful when you have multiple datasets that you want
+  to iterate in locksteps. This might be easiest to grasp with a
+  simple code example.
+
+  >>> ones_dataset = NumpyDataset(X=np.ones((5, 3)))        
+  >>> zeros_dataset = NumpyDataset(X=np.zeros((5, 3)))      
+  >>> databag = Databag({"ones": ones_dataset, "zeros": zeros_dataset}) 
+  >>> for sample_dict in databag.iterbatches(batch_size=1): 
+  ...   print(sample_dict) 
+  {'ones': array([[1., 1., 1.]]), 'zeros': array([[0., 0., 0.]])}
+  {'ones': array([[1., 1., 1.]]), 'zeros': array([[0., 0., 0.]])}
+  {'ones': array([[1., 1., 1.]]), 'zeros': array([[0., 0., 0.]])}
+  {'ones': array([[1., 1., 1.]]), 'zeros': array([[0., 0., 0.]])}
+  {'ones': array([[1., 1., 1.]]), 'zeros': array([[0., 0., 0.]])}
+
+  Note how we get a batch at a time from each of the datasets in the
+  `Databag`. This can be useful for training models that combine data
+  from multiple `Dataset` objects at a time.
   """
 
   def __init__(self, datasets=None):
+    """Initialize this `Databag`.
+
+    Parameters
+    ----------
+    datasets: dict, optional
+      A dictionary mapping keys to `Dataset` objects.
+    """
     if datasets is None:
       self.datasets = dict()
     else:
       self.datasets = datasets
 
   def add_dataset(self, key, dataset):
+    """Adds a dataset to this databag.
+
+    Parameters
+    ----------
+    key: hashable value
+      Key to be added
+    dataset: `Dataset`
+      The dataset that `key` should point to.
+    """
     self.datasets[key] = dataset
 
   def iterbatches(self, **kwargs):
-    """
-    Loop through all internal datasets in the same order
+    """Loop through all internal datasets in the same order.
+
     Parameters
     ----------
     batch_size: int
@@ -1966,7 +2089,6 @@ class Databag(object):
     Returns
     -------
     Generator which yields a dictionary {key: dataset.X[batch]}
-
     """
     key_order = [x for x in self.datasets.keys()]
     if "epochs" in kwargs:

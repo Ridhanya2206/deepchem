@@ -65,10 +65,31 @@ def get_data_dir():
 # The number of elements to print for dataset ids/tasks
 _print_threshold = 10
 def get_print_threshold():
-  """Return the printing threshold for array."""
+  """Return the printing threshold for array.
+
+  The print threshold is the number of elements from ids/tasks to
+  print when printing representations of `Dataset` objects. 
+
+  Returns 
+  ----------
+  threshold: int
+    Number of elements that will be printed
+  """
   return _print_threshold
 
 def set_print_threshold(threshold):
+  """Set print threshold
+
+  The print threshold is the number of elements from ids/tasks to
+  print when printing representations of `Dataset` objects. 
+
+  Parameters
+  ----------
+  threshold: int
+    Number of elements to print.
+  """
+  global _print_threshold
+  _print_threshold = threshold
 
 def download_url(url, dest_dir=get_data_dir(), name=None):
   """Download a file to disk.
