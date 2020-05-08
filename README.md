@@ -156,4 +156,4 @@ To cite this book, please use this bibtex entry:
 ```
 
 ## Version
-2.1.0
+2.4.0rc
